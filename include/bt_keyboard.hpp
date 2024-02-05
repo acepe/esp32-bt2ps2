@@ -36,7 +36,7 @@
 #include "esp_bt_main.h"
 #include "esp_hidh.h"
 #include "esp_hid_common.h"
-#include "esp_gap_bt_api.h"
+// #include "esp_gap_bt_api.h"
 #include "esp_gap_ble_api.h"
 #include "esp_gatts_api.h"
 #include "esp_gatt_defs.h"
@@ -82,7 +82,7 @@ private:
 
   static const esp_bt_mode_t HIDH_IDLE_MODE = (esp_bt_mode_t)0x00;
   static const esp_bt_mode_t HIDH_BLE_MODE = (esp_bt_mode_t)0x01;
-  static const esp_bt_mode_t HIDH_BT_MODE = (esp_bt_mode_t)0x02;
+  // static const esp_bt_mode_t HIDH_BT_MODE = (esp_bt_mode_t)0x02;
   static const esp_bt_mode_t HIDH_BTDM_MODE = (esp_bt_mode_t)0x03;
 
 #if CONFIG_BT_HID_HOST_ENABLED
@@ -97,7 +97,7 @@ private:
   static const esp_bt_mode_t HID_HOST_MODE = HIDH_IDLE_MODE;
 #endif
 
-  static SemaphoreHandle_t bt_hidh_cb_semaphore;
+  // static SemaphoreHandle_t bt_hidh_cb_semaphore;
   static SemaphoreHandle_t ble_hidh_cb_semaphore;
 
   struct esp_hid_scan_result_t
@@ -112,11 +112,11 @@ private:
 
     union
     {
-      struct
-      {
-        esp_bt_cod_t cod;
-        esp_bt_uuid_t uuid;
-      } bt;
+      // struct
+      // {
+      //   esp_bt_cod_t cod;
+      //   esp_bt_uuid_t uuid;
+      // } bt;
       struct
       {
         esp_ble_addr_type_t addr_type;
@@ -125,7 +125,7 @@ private:
     };
   };
 
-  esp_hid_scan_result_t *bt_scan_results;
+   esp_hid_scan_result_t *bt_scan_results;
   esp_hid_scan_result_t *ble_scan_results;
   static esp_hid_scan_result_t lastConnected;
   size_t num_bt_scan_results;
@@ -133,33 +133,33 @@ private:
 
   static void hidh_callback(void *handler_args, esp_event_base_t base, int32_t id, void *event_data);
 
-  static void bt_gap_event_handler(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param);
+  // static void bt_gap_event_handler(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param);
   static void ble_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param);
 
   static const char *ble_addr_type_str(esp_ble_addr_type_t ble_addr_type);
   static const char *ble_gap_evt_str(uint8_t event);
-  static const char *bt_gap_evt_str(uint8_t event);
+  // static const char *bt_gap_evt_str(uint8_t event);
   static const char *ble_key_type_str(esp_ble_key_type_t key_type);
 
   static const char *gap_bt_prop_type_names[];
   static const char *ble_gap_evt_names[];
-  static const char *bt_gap_evt_names[];
+  // static const char *bt_gap_evt_names[];
   static const char *ble_addr_type_names[];
 
   static const char shift_trans_dict[];
 
-  void handle_bt_device_result(esp_bt_gap_cb_param_t *param);
+  // void handle_bt_device_result(esp_bt_gap_cb_param_t *param);
   void handle_ble_device_result(esp_ble_gap_cb_param_t *scan_rst);
 
   void esp_hid_scan_results_free(esp_hid_scan_result_t *results);
   esp_hid_scan_result_t *find_scan_result(esp_bd_addr_t bda, esp_hid_scan_result_t *results);
 
-  void add_bt_scan_result(esp_bd_addr_t bda,
-                          esp_bt_cod_t *cod,
-                          esp_bt_uuid_t *uuid,
-                          uint8_t *name,
-                          uint8_t name_len,
-                          int rssi);
+  // void add_bt_scan_result(esp_bd_addr_t bda,
+  //                         esp_bt_cod_t *cod,
+  //                         esp_bt_uuid_t *uuid,
+  //                         uint8_t *name,
+  //                         uint8_t name_len,
+  //                         int rssi);
 
   void add_ble_scan_result(esp_bd_addr_t bda,
                            esp_ble_addr_type_t addr_type,
@@ -171,7 +171,7 @@ private:
   void print_uuid(esp_bt_uuid_t *uuid);
 
   esp_err_t start_ble_scan(uint32_t seconds);
-  esp_err_t start_bt_scan(uint32_t seconds);
+  // esp_err_t start_bt_scan(uint32_t seconds);
   esp_err_t esp_hid_scan(uint32_t seconds, size_t *num_results, esp_hid_scan_result_t **results);
 
   inline void set_battery_level(uint8_t level) { battery_level = level; }
@@ -187,9 +187,8 @@ private:
   bool caps_lock;
 
 public:
-  BTKeyboard() : bt_scan_results(nullptr),
-                 ble_scan_results(nullptr),
-                 num_bt_scan_results(0),
+  BTKeyboard() : 
+                 ble_scan_results(nullptr),                 
                  num_ble_scan_results(0),
                  pairing_handler(nullptr),
                  caps_lock(false)
