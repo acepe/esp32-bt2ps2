@@ -8,14 +8,14 @@ Dedicated to all who love me and all who I love.
 Never stop dreaming.
 */
 
-#include "..\include\globals.hpp"
+#include "../include/globals.hpp"
 #include "nvs_flash.h"
-#include "driver\gpio.h"
-#include "..\include\bt_keyboard.hpp"
+#include "driver/gpio.h"
+#include "../include/bt_keyboard.hpp"
 #include <iostream>
 #include <cmath>
 
-#include "..\include\esp32-ps2dev.h" // Emulate a PS/2 device
+#include "../include/esp32-ps2dev.h" // Emulate a PS/2 device
 
 static constexpr char const *TAG = "BTKeyboard";
 
