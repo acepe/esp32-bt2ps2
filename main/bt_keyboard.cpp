@@ -43,9 +43,7 @@
 // SemaphoreHandle_t BTKeyboard::bt_hidh_cb_semaphore = nullptr;
 SemaphoreHandle_t BTKeyboard::ble_hidh_cb_semaphore = nullptr;
 
-// const char *BTKeyboard::gap_bt_prop_type_names[] = {"", "BDNAME", "COD", "RSSI", "EIR"};
 const char *BTKeyboard::ble_gap_evt_names[] = {"ADV_DATA_SET_COMPLETE", "SCAN_RSP_DATA_SET_COMPLETE", "SCAN_PARAM_SET_COMPLETE", "SCAN_RESULT", "ADV_DATA_RAW_SET_COMPLETE", "SCAN_RSP_DATA_RAW_SET_COMPLETE", "ADV_START_COMPLETE", "SCAN_START_COMPLETE", "AUTH_CMPL", "KEY", "SEC_REQ", "PASSKEY_NOTIF", "PASSKEY_REQ", "OOB_REQ", "LOCAL_IR", "LOCAL_ER", "NC_REQ", "ADV_STOP_COMPLETE", "SCAN_STOP_COMPLETE", "SET_STATIC_RAND_ADDR", "UPDATE_CONN_PARAMS", "SET_PKT_LENGTH_COMPLETE", "SET_LOCAL_PRIVACY_COMPLETE", "REMOVE_BOND_DEV_COMPLETE", "CLEAR_BOND_DEV_COMPLETE", "GET_BOND_DEV_COMPLETE", "READ_RSSI_COMPLETE", "UPDATE_WHITELIST_COMPLETE"};
-// const char *BTKeyboard::bt_gap_evt_names[] = {"DISC_RES", "DISC_STATE_CHANGED", "RMT_SRVCS", "RMT_SRVC_REC", "AUTH_CMPL", "PIN_REQ", "CFM_REQ", "KEY_NOTIF", "KEY_REQ", "READ_RSSI_DELTA"};
 const char *BTKeyboard::ble_addr_type_names[] = {"PUBLIC", "RANDOM", "RPA_PUBLIC", "RPA_RANDOM"};
 
 const char BTKeyboard::shift_trans_dict[] =
@@ -287,13 +285,9 @@ bool BTKeyboard::setup(pid_handler *handler)
     return false;
   }
 
-  // Classic Bluetooth GAP
-
   esp_ble_io_cap_t iocap = ESP_IO_CAP_IO;
 
-
   // BLE GAP
-
   if ((ret = esp_ble_gap_register_callback(ble_gap_event_handler)))
   {
     ESP_LOGE(TAG, "esp_ble_gap_register_callback failed: %d", ret);
