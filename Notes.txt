@@ -1,8 +1,8 @@
-* commented every BT* code that had a BLE* counterpart
+* deleted every BT* code that had a BLE* counterpart
 * iocap had to be changed to ble:
     esp_ble_io_cap_t iocap = ESP_IO_CAP_IO;
 * compiled, but had linker errors:
     enabled bluetooth 4.2 features in menuconfig
-* pairing works only with ble 4.x Keyboard (Logitech MX-Keys), but not with Keychron K1 Pro, 
-  which should be Bluetooth (LE?) 5.1, but seems to be only recognized viausb keyboard BT-classic..
+* pairing works only with ble 4.x Keyboard (e.g. my Logitech MX-Keys), but not with Keychron K1 Pro, 
+  which should be Bluetooth (LE?) 5.1, but seems to be only recognized via BT-classic..
 

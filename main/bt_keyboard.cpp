@@ -83,15 +83,6 @@ BTKeyboard::ble_gap_evt_str(uint8_t event)
   return ble_gap_evt_names[event];
 }
 
-// const char *
-// BTKeyboard::bt_gap_evt_str(uint8_t event)
-// {
-//   if (event >= SIZEOF_ARRAY(bt_gap_evt_names))
-//   {
-//     return "UNKNOWN";
-//   }
-//   return bt_gap_evt_names[event];
-// }
 
 const char *
 BTKeyboard::ble_key_type_str(esp_ble_key_type_t key_type)
@@ -186,75 +177,6 @@ BTKeyboard::find_scan_result(esp_bd_addr_t bda, esp_hid_scan_result_t *results)
   return nullptr;
 }
 
-// void BTKeyboard::add_bt_scan_result(esp_bd_addr_t bda,
-//                                     esp_bt_cod_t *cod,
-//                                     esp_bt_uuid_t *uuid,
-//                                     uint8_t *name,
-//                                     uint8_t name_len,
-//                                     int rssi)
-// {
-//   esp_hid_scan_result_t *r = find_scan_result(bda, bt_scan_results);
-//   if (r)
-//   {
-//     // Some info may come later
-//     if (r->name == nullptr && name && name_len)
-//     {
-//       char *name_s = (char *)malloc(name_len + 1);
-//       if (name_s == nullptr)
-//       {
-//         ESP_LOGE(TAG, "Malloc result name failed!");
-//         return;
-//       }
-//       memcpy(name_s, name, name_len);
-//       name_s[name_len] = 0;
-//       r->name = (const char *)name_s;
-//     }
-//     if (r->bt.uuid.len == 0 && uuid->len)
-//     {
-//       memcpy(&r->bt.uuid, uuid, sizeof(esp_bt_uuid_t));
-//     }
-//     if (rssi != 0)
-//     {
-//       r->rssi = rssi;
-//     }
-//     return;
-//   }
-
-//   r = (esp_hid_scan_result_t *)malloc(sizeof(esp_hid_scan_result_t));
-
-//   if (r == nullptr)
-//   {
-//     ESP_LOGE(TAG, "Malloc bt_hidh_scan_result_t failed!");
-//     return;
-//   }
-
-//   r->transport = ESP_HID_TRANSPORT_BT;
-
-//   memcpy(r->bda, bda, sizeof(esp_bd_addr_t));
-//   memcpy(&r->bt.cod, cod, sizeof(esp_bt_cod_t));
-//   memcpy(&r->bt.uuid, uuid, sizeof(esp_bt_uuid_t));
-
-//   r->usage = esp_hid_usage_from_cod((uint32_t)cod);
-//   r->rssi = rssi;
-//   r->name = nullptr;
-
-//   if (name_len && name)
-//   {
-//     char *name_s = (char *)malloc(name_len + 1);
-//     if (name_s == nullptr)
-//     {
-//       free(r);
-//       ESP_LOGE(TAG, "Malloc result name failed!");
-//       return;
-//     }
-//     memcpy(name_s, name, name_len);
-//     name_s[name_len] = 0;
-//     r->name = (const char *)name_s;
-//   }
-//   r->next = bt_scan_results;
-//   bt_scan_results = r;
-//   num_bt_scan_results++;
-// }
 
 void BTKeyboard::add_ble_scan_result(esp_bd_addr_t bda,
                                      esp_ble_addr_type_t addr_type,
@@ -328,28 +250,19 @@ bool BTKeyboard::setup(pid_handler *handler)
     return false;
   }
 
-  // bt_hidh_cb_semaphore = xSemaphoreCreateBinary();
-  // if (bt_hidh_cb_semaphore == nullptr)
-  // {
-  //   ESP_LOGE(TAG, "xSemaphoreCreateMutex failed!");
-  //   return false;
-  // }
+ 
 
    ble_hidh_cb_semaphore = xSemaphoreCreateBinary();
   if (ble_hidh_cb_semaphore == nullptr)
   {
-    ESP_LOGE(TAG, "xSemaphoreCreateMutex failed!");
-    // vSemaphoreDelete(bt_hidh_cb_semaphore);
-    // bt_hidh_cb_semaphore = nullptr;
+    ESP_LOGE(TAG, "xSemaphoreCreateMutex failed!");    
     return false;
   }
 
   esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
 
   bt_cfg.bluetooth_mode = mode;
-  // bt_cfg.bt_max_acl_conn = 3;
-  // bt_cfg.bt_max_sync_conn = 3;
-
+  
   if ((ret = esp_bt_controller_init(&bt_cfg)))
   {
     ESP_LOGE(TAG, "esp_bt_controller_init failed: %d", ret);
@@ -376,36 +289,8 @@ bool BTKeyboard::setup(pid_handler *handler)
 
   // Classic Bluetooth GAP
 
-  // esp_bt_sp_param_t param_type = ESP_BT_SP_IOCAP_MODE;
   esp_ble_io_cap_t iocap = ESP_IO_CAP_IO;
 
-
-  // esp_bt_gap_set_security_param(param_type, &iocap, sizeof(uint8_t));
-
-  // /*
-  //  * Set default parameters for Legacy Pairing
-  //  * Use fixed pin code
-  //  */
-  // esp_bt_pin_type_t pin_type = ESP_BT_PIN_TYPE_FIXED;
-  // esp_bt_pin_code_t pin_code;
-  // pin_code[0] = '1';
-  // pin_code[1] = '2';
-  // pin_code[2] = '3';
-  // pin_code[3] = '4';
-  // esp_bt_gap_set_pin(pin_type, 4, pin_code);
-
-  // if ((ret = esp_bt_gap_register_callback(bt_gap_event_handler)))
-  // {
-  //   ESP_LOGE(TAG, "esp_bt_gap_register_callback failed: %d", ret);
-  //   return false;
-  // }
-
-  // // Allow BT devices to connect back to us
-  // if ((ret = esp_bt_gap_set_scan_mode(ESP_BT_CONNECTABLE, ESP_BT_NON_DISCOVERABLE)))
-  // {
-  //   ESP_LOGE(TAG, "esp_bt_gap_set_scan_mode failed: %d", ret);
-  //   return false;
-  // }
 
   // BLE GAP
 
@@ -449,160 +334,6 @@ bool BTKeyboard::setup(pid_handler *handler)
   battery_level = -1;
   return true;
 }
-
-// void BTKeyboard::handle_bt_device_result(esp_bt_gap_cb_param_t *param)
-// {
-//   GAP_DBG_PRINTF("BT : " ESP_BD_ADDR_STR, ESP_BD_ADDR_HEX(param->disc_res.bda));
-
-//   uint32_t codv = 0;
-//   esp_bt_cod_t *cod = (esp_bt_cod_t *)&codv;
-//   int8_t rssi = 0;
-//   uint8_t *name = nullptr;
-//   uint8_t name_len = 0;
-//   esp_bt_uuid_t uuid;
-
-//   uuid.len = ESP_UUID_LEN_16;
-//   uuid.uuid.uuid16 = 0;
-
-//   for (int i = 0; i < param->disc_res.num_prop; i++)
-//   {
-//     esp_bt_gap_dev_prop_t *prop = &param->disc_res.prop[i];
-//     if (prop->type != ESP_BT_GAP_DEV_PROP_EIR)
-//     {
-//       GAP_DBG_PRINTF(", %s: ", gap_bt_prop_type_names[prop->type]);
-//     }
-//     if (prop->type == ESP_BT_GAP_DEV_PROP_BDNAME)
-//     {
-//       name = (uint8_t *)prop->val;
-//       name_len = strlen((const char *)name);
-//       GAP_DBG_PRINTF("%s", (const char *)name);
-//     }
-//     else if (prop->type == ESP_BT_GAP_DEV_PROP_RSSI)
-//     {
-//       rssi = *((int8_t *)prop->val);
-//       GAP_DBG_PRINTF("%d", rssi);
-//     }
-//     else if (prop->type == ESP_BT_GAP_DEV_PROP_COD)
-//     {
-//       memcpy(&codv, prop->val, sizeof(uint32_t));
-//       GAP_DBG_PRINTF("major: %s, minor: %d, service: 0x%03x", esp_hid_cod_major_str(cod->major), cod->minor, cod->service);
-//     }
-//     else if (prop->type == ESP_BT_GAP_DEV_PROP_EIR)
-//     {
-//       uint8_t len = 0;
-//       uint8_t *data = 0;
-
-//       data = esp_bt_gap_resolve_eir_data((uint8_t *)prop->val, ESP_BT_EIR_TYPE_CMPL_16BITS_UUID, &len);
-
-//       if (data == nullptr)
-//       {
-//         data = esp_bt_gap_resolve_eir_data((uint8_t *)prop->val, ESP_BT_EIR_TYPE_INCMPL_16BITS_UUID, &len);
-//       }
-
-//       if (data && len == ESP_UUID_LEN_16)
-//       {
-//         uuid.len = ESP_UUID_LEN_16;
-//         uuid.uuid.uuid16 = data[0] + (data[1] << 8);
-//         GAP_DBG_PRINTF(", ");
-//         print_uuid(&uuid);
-//         continue;
-//       }
-
-//       data = esp_bt_gap_resolve_eir_data((uint8_t *)prop->val, ESP_BT_EIR_TYPE_CMPL_32BITS_UUID, &len);
-
-//       if (data == nullptr)
-//       {
-//         data = esp_bt_gap_resolve_eir_data((uint8_t *)prop->val, ESP_BT_EIR_TYPE_INCMPL_32BITS_UUID, &len);
-//       }
-
-//       if (data && len == ESP_UUID_LEN_32)
-//       {
-//         uuid.len = len;
-//         memcpy(&uuid.uuid.uuid32, data, sizeof(uint32_t));
-//         GAP_DBG_PRINTF(", ");
-//         print_uuid(&uuid);
-//         continue;
-//       }
-
-//       data = esp_bt_gap_resolve_eir_data((uint8_t *)prop->val, ESP_BT_EIR_TYPE_CMPL_128BITS_UUID, &len);
-
-//       if (data == nullptr)
-//       {
-//         data = esp_bt_gap_resolve_eir_data((uint8_t *)prop->val, ESP_BT_EIR_TYPE_INCMPL_128BITS_UUID, &len);
-//       }
-
-//       if (data && len == ESP_UUID_LEN_128)
-//       {
-//         uuid.len = len;
-//         memcpy(uuid.uuid.uuid128, (uint8_t *)data, len);
-//         GAP_DBG_PRINTF(", ");
-//         print_uuid(&uuid);
-//         continue;
-//       }
-
-//       // try to find a name
-//       if (name == nullptr)
-//       {
-//         data = esp_bt_gap_resolve_eir_data((uint8_t *)prop->val, ESP_BT_EIR_TYPE_CMPL_LOCAL_NAME, &len);
-
-//         if (data == nullptr)
-//         {
-//           data = esp_bt_gap_resolve_eir_data((uint8_t *)prop->val, ESP_BT_EIR_TYPE_SHORT_LOCAL_NAME, &len);
-//         }
-
-//         if (data && len)
-//         {
-//           name = data;
-//           name_len = len;
-//           GAP_DBG_PRINTF(", NAME: ");
-//           for (int x = 0; x < len; x++)
-//           {
-//             GAP_DBG_PRINTF("%c", (char)data[x]);
-//           }
-//         }
-//       }
-//     }
-//   }
-//   GAP_DBG_PRINTF("\n");
-
-//   if ((cod->major == ESP_BT_COD_MAJOR_DEV_PERIPHERAL) ||
-//       (find_scan_result(param->disc_res.bda, bt_scan_results) != nullptr))
-//   {
-//     add_bt_scan_result(param->disc_res.bda, cod, &uuid, name, name_len, rssi);
-//   }
-// }
-
-// void BTKeyboard::bt_gap_event_handler(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
-// {
-//   switch (event)
-//   {
-//   case ESP_BT_GAP_DISC_STATE_CHANGED_EVT:
-//   {
-//     ESP_LOGV(TAG, "BT GAP DISC_STATE %s", (param->disc_st_chg.state == ESP_BT_GAP_DISCOVERY_STARTED) ? "START" : "STOP");
-//     if (param->disc_st_chg.state == ESP_BT_GAP_DISCOVERY_STOPPED)
-//     {
-//       SEND_BT_CB();
-//     }
-//     break;
-//   }
-//   case ESP_BT_GAP_DISC_RES_EVT:
-//   {
-//     bt_keyboard->handle_bt_device_result(param);
-//     break;
-//   }
-//   case ESP_BT_GAP_KEY_NOTIF_EVT:
-//     ESP_LOGV(TAG, "BT GAP KEY_NOTIF passkey:%d", param->key_notif.passkey);
-//     if (bt_keyboard->pairing_handler != nullptr)
-//       (*bt_keyboard->pairing_handler)(param->key_notif.passkey);
-//     break;
-//   case ESP_BT_GAP_MODE_CHG_EVT:
-//     ESP_LOGV(TAG, "BT GAP MODE_CHG_EVT mode:%d", param->mode_chg.mode);
-//     break;
-//   default:
-//     ESP_LOGV(TAG, "BT GAP EVENT %s", bt_gap_evt_str(event));
-//     break;
-//   }
-// }
 
 void BTKeyboard::handle_ble_device_result(esp_ble_gap_cb_param_t *param)
 {
@@ -793,18 +524,6 @@ void BTKeyboard::ble_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap
   }
 }
 
-// esp_err_t
-// BTKeyboard::start_bt_scan(uint32_t seconds)
-// {
-//   esp_err_t ret = ESP_OK;
-//   if ((ret = esp_bt_gap_start_discovery(ESP_BT_INQ_MODE_GENERAL_INQUIRY, (int)(seconds / 1.28), 0)) != ESP_OK)
-//   {
-//     ESP_LOGE(TAG, "esp_bt_gap_start_discovery failed: %d", ret);
-//     return ret;
-//   }
-//   return ret;
-// }
-
 esp_err_t
 BTKeyboard::start_ble_scan(uint32_t seconds)
 {
@@ -851,24 +570,10 @@ BTKeyboard::esp_hid_scan(uint32_t seconds, size_t *num_results, esp_hid_scan_res
     return ESP_FAIL;
   }
 
-  // if (start_bt_scan(seconds) == ESP_OK)
-  // {
-  //   WAIT_BT_CB();
-  // }
-  // else
-  // {
-  //   return ESP_FAIL;
-  // }
-
-   *num_results = num_ble_scan_results;
-  // *results = bt_scan_results;
+  *num_results = num_ble_scan_results;
 
    if (num_bt_scan_results)
    {
-  //   while (bt_scan_results->next != NULL)
-  //   {
-  //     bt_scan_results = bt_scan_results->next;
-  //   }
      bt_scan_results->next = ble_scan_results;
    }
    else
@@ -970,16 +675,6 @@ bool BTKeyboard::devices_scan(int seconds_wait_time)
         printf("APPEARANCE: 0x%04x, ", r->ble.appearance);
         printf("ADDR_TYPE: '%s', ", ble_addr_type_str(r->ble.addr_type));
       }
-      // if (r->transport == ESP_HID_TRANSPORT_BT)
-      // {
-      //   cr = r;
-      //   btFound = true;
-      //   printf("COD: %s[", esp_hid_cod_major_str(r->bt.cod.major));
-      //   esp_hid_cod_minor_print(r->bt.cod.minor, stdout);
-      //   printf("] srv 0x%03x, ", r->bt.cod.service);
-      //   print_uuid(&r->bt.uuid);
-      //   printf(", ");
-      // }
       printf("NAME: %s ", r->name ? r->name : "");
       printf("\n");
       r = r->next;
@@ -1012,12 +707,6 @@ void BTKeyboard::hidh_callback(void *handler_args, esp_event_base_t base, int32_
   switch (event)
   {
   case ESP_HIDH_OPEN_EVENT:
-    // { // Code for ESP-IDF 4.3.1
-    //   const uint8_t *bda = esp_hidh_dev_bda_get(param->open.dev);
-    //   ESP_LOGV(TAG, ESP_BD_ADDR_STR " OPEN: %s", ESP_BD_ADDR_HEX(bda), esp_hidh_dev_name_get(param->open.dev));
-    //   esp_hidh_dev_dump(param->open.dev, stdout);
-    //   break;
-    // }
     { // Code for ESP-IDF 4.4
       if (param->open.status == ESP_OK)
       {

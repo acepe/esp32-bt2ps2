@@ -36,12 +36,10 @@
 #include "esp_bt_main.h"
 #include "esp_hidh.h"
 #include "esp_hid_common.h"
-// #include "esp_gap_bt_api.h"
 #include "esp_gap_ble_api.h"
 #include "esp_gatts_api.h"
 #include "esp_gatt_defs.h"
 #include "esp_wifi.h"
-// #include "esp32-hal-bt.h"
 
 class BTKeyboard
 {
@@ -68,9 +66,7 @@ public:
   const uint8_t META_MASK = ((uint8_t)KeyModifier::L_META) | ((uint8_t)KeyModifier::R_META);
 
   static const uint8_t MAX_KEY_COUNT = 10; // Adjusted for normal humans with 10 fingers
-  // static const uint8_t MAX_KEY_COUNT = 11; // Uncomment if also using dick
-  // static const uint8_t MAX_KEY_COUNT = 5; // Uncomment if you're a known argentinian politician
-
+  
   struct KeyInfo
   {
     KeyModifier modifier;
@@ -111,12 +107,7 @@ private:
     esp_hid_transport_t transport; // BT, BLE or USB
 
     union
-    {
-      // struct
-      // {
-      //   esp_bt_cod_t cod;
-      //   esp_bt_uuid_t uuid;
-      // } bt;
+    {      
       struct
       {
         esp_ble_addr_type_t addr_type;
@@ -154,13 +145,7 @@ private:
   void esp_hid_scan_results_free(esp_hid_scan_result_t *results);
   esp_hid_scan_result_t *find_scan_result(esp_bd_addr_t bda, esp_hid_scan_result_t *results);
 
-  // void add_bt_scan_result(esp_bd_addr_t bda,
-  //                         esp_bt_cod_t *cod,
-  //                         esp_bt_uuid_t *uuid,
-  //                         uint8_t *name,
-  //                         uint8_t name_len,
-  //                         int rssi);
-
+ 
   void add_ble_scan_result(esp_bd_addr_t bda,
                            esp_ble_addr_type_t addr_type,
                            uint16_t appearance,
@@ -171,7 +156,6 @@ private:
   void print_uuid(esp_bt_uuid_t *uuid);
 
   esp_err_t start_ble_scan(uint32_t seconds);
-  // esp_err_t start_bt_scan(uint32_t seconds);
   esp_err_t esp_hid_scan(uint32_t seconds, size_t *num_results, esp_hid_scan_result_t **results);
 
   inline void set_battery_level(uint8_t level) { battery_level = level; }
