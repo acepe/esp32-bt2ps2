@@ -8,20 +8,32 @@ Dedicated to all who love me and all who I love.
 Never stop dreaming.
 */
 
-#include "../include/globals.hpp"
 #include "nvs_flash.h"
 #include "driver/gpio.h"
-#include "../include/bt_keyboard.hpp"
 #include <iostream>
 #include <cmath>
+#include <stdio.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "esp_log.h"
+#include "driver/i2c.h"
+#include "string.h"
 
+#include "../include/globals.hpp"
+#include "../include/bt_keyboard.hpp"
 #include "../include/esp32-ps2dev.h" // Emulate a PS/2 device
 
 static constexpr char const *TAG = "BTKeyboard";
 
+#define I2C_MASTER_SCL_IO 22      /*!< GPIO number for I2C master clock */
+#define I2C_MASTER_SDA_IO 23      /*!< GPIO number for I2C master data  */
+#define I2C_MASTER_NUM I2C_NUM_0  /*!< I2C port number for master dev */
+#define I2C_MASTER_FREQ_HZ 100000 /*!< I2C master clock frequency */
+#define I2C_SLAVE_ADDR 0x27       /*!< I2C slave address for the slave device */
+
 // PS/2 emulation variables
-const int CLK_PIN = 22; // IMPORTANT: Not all pins are suitable out-of-the-box. Check README for more info
-const int DATA_PIN = 23;
+const int CLK_PIN = 18; //was:22 IMPORTANT: Not all pins are suitable out-of-the-box. Check README for more info
+const int DATA_PIN = 19; //was: 23
 esp32_ps2dev::PS2Keyboard keyboard(CLK_PIN, DATA_PIN);
 
 // BTKeyboard section
@@ -90,8 +102,54 @@ void pairing_handler(uint32_t pid)
 extern "C"
 {
 
+// HID report structure for keyboards
+    typedef struct {
+        uint8_t modifiers;
+        uint8_t reserved;
+        uint8_t keys[6];
+    } hid_keyboard_report_t;
+  
+  
+    void i2c_master_init() {
+        i2c_config_t conf;
+        conf.mode = I2C_MODE_MASTER;
+        conf.sda_io_num = I2C_MASTER_SDA_IO;
+        conf.sda_pullup_en = GPIO_PULLUP_ENABLE;
+        conf.scl_io_num = I2C_MASTER_SCL_IO;
+        conf.scl_pullup_en = GPIO_PULLUP_ENABLE;
+        conf.master.clk_speed = I2C_MASTER_FREQ_HZ;
+        conf.clk_flags = 0;
+        i2c_param_config(I2C_MASTER_NUM, &conf);
+        i2c_driver_install(I2C_MASTER_NUM, conf.mode, 0, 0, 0);
+
+        ESP_LOGI(TAG, "I2C Initialized");
+    }
+
+    void i2c_master_send_text(const hid_keyboard_report_t *report) {
+        size_t size = sizeof(hid_keyboard_report_t);
+
+        ESP_LOGI(TAG, "Sending report");
+        ESP_LOG_BUFFER_HEX(TAG, report, size);
+
+        i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+        i2c_master_start(cmd);
+        i2c_master_write_byte(cmd, (I2C_SLAVE_ADDR << 1) | I2C_MASTER_WRITE, true);
+        i2c_master_write(cmd, (uint8_t *)report, size, true);
+        i2c_master_stop(cmd);
+        i2c_master_cmd_begin(I2C_MASTER_NUM, cmd, 1000 / portTICK_PERIOD_MS);
+        i2c_cmd_link_delete(cmd);
+    }
+
+    void reset_report(hid_keyboard_report_t *report) {
+        report->modifiers = 0;  // Reset modifiers
+        for (int i = 0; i < sizeof(report->keys); i++) {
+        report->keys[i] = 0;
+        }
+    }
+   
     void app_main(void)
     {
+        i2c_master_init();
 
         gpio_config_t io_conf;
         io_conf.intr_type = GPIO_INTR_DISABLE;
@@ -100,6 +158,7 @@ extern "C"
         io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
         io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
         gpio_config(&io_conf);
+
         io_conf.pin_bit_mask = (1ULL << CLK_PIN);
         gpio_config(&io_conf);
 
@@ -108,7 +167,9 @@ extern "C"
         gpio_reset_pin(GPIO_NUM_2);                       // using built-in LED for notifications
         gpio_set_direction(GPIO_NUM_2, GPIO_MODE_OUTPUT); // Set the GPIO as a push/pull output
         gpio_set_level(GPIO_NUM_2, 1);
+        
         keyboard.begin();
+
         gpio_set_level(GPIO_NUM_2, 0);
 
         // init BTKeyboard
@@ -171,10 +232,16 @@ extern "C"
             info.keys[j] = 0;
         }
 
+
         while (true)
         {
             if (bt_keyboard.wait_for_low_event(info, repeat_period))
             {
+                hid_keyboard_report_t report;
+                reset_report(&report);
+
+                report.modifiers = (uint8_t)info.modifier;
+
                 // Handle modifier keys
                 if (info.modifier != infoBuf.modifier)
                 {
@@ -328,9 +395,12 @@ extern "C"
                     }
                     if (!found)
                     {
-                        ESP_LOGD(TAG, "Up key: %x", infoBuf.keys[i]);
-                        keyboard.keyHid_send(infoBuf.keys[i], false);
+                        ESP_LOGI(TAG, "Up key: %x", infoBuf.keys[i]);
+                        keyboard.keyHid_send(infoBuf.keys[i], false);                        
                         gpio_set_level(GPIO_NUM_2, 1);
+
+                        report.keys[i] = info.keys[i];   
+                        
                     }
                     else
                         found = false;
@@ -351,13 +421,17 @@ extern "C"
                     }
                     if (!found)
                     {
-                        ESP_LOGD(TAG, "Down key: %x", info.keys[i]);
+                        ESP_LOGI(TAG, "Down key: %x", info.keys[i]);
                         keyboard.keyHid_send(info.keys[i], true);
                         gpio_set_level(GPIO_NUM_2, 0);
+
+                        report.keys[i] = info.keys[i];
                     }
                     else
                         found = false;
                 }
+                
+                i2c_master_send_text(&report);
 
                 infoBuf = info;                 // Now all the keys are handled, we save the state
                 typematicLeft = typematicDelay; // Typematic timer reset
