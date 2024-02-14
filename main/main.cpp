@@ -21,7 +21,6 @@ Never stop dreaming.
 
 #include "../include/globals.hpp"
 #include "../include/bt_keyboard.hpp"
-#include "../include/esp32-ps2dev.h" // Emulate a PS/2 device
 
 static constexpr char const *TAG = "BTKeyboard";
 
@@ -30,11 +29,6 @@ static constexpr char const *TAG = "BTKeyboard";
 #define I2C_MASTER_NUM I2C_NUM_0  /*!< I2C port number for master dev */
 #define I2C_MASTER_FREQ_HZ 100000 /*!< I2C master clock frequency */
 #define I2C_SLAVE_ADDR 0x27       /*!< I2C slave address for the slave device */
-
-// PS/2 emulation variables
-const int CLK_PIN = 18; //was:22 IMPORTANT: Not all pins are suitable out-of-the-box. Check README for more info
-const int DATA_PIN = 19; //was: 23
-esp32_ps2dev::PS2Keyboard keyboard(CLK_PIN, DATA_PIN);
 
 // BTKeyboard section
 BTKeyboard bt_keyboard;
@@ -149,27 +143,11 @@ extern "C"
    
     void app_main(void)
     {
-        i2c_master_init();
-
-        gpio_config_t io_conf;
-        io_conf.intr_type = GPIO_INTR_DISABLE;
-        io_conf.mode = GPIO_MODE_OUTPUT_OD;
-        io_conf.pin_bit_mask = (1ULL << DATA_PIN);
-        io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
-        io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
-        gpio_config(&io_conf);
-
-        io_conf.pin_bit_mask = (1ULL << CLK_PIN);
-        gpio_config(&io_conf);
-
-        // init PS/2 emulation first
-
         gpio_reset_pin(GPIO_NUM_2);                       // using built-in LED for notifications
         gpio_set_direction(GPIO_NUM_2, GPIO_MODE_OUTPUT); // Set the GPIO as a push/pull output
         gpio_set_level(GPIO_NUM_2, 1);
         
-        keyboard.begin();
-
+        i2c_master_init();
         gpio_set_level(GPIO_NUM_2, 0);
 
         // init BTKeyboard
@@ -212,9 +190,7 @@ extern "C"
             gpio_set_level(GPIO_NUM_2, 1); // success, device found
         }
 
-        // time variables, don't adjust unless you know what you're doing
         uint8_t typematicRate = 20;    // characters per second in Typematic mode
-        uint16_t typematicDelay = 500; // ms to become Typematic
 
         // fixed stuff
         uint8_t cycle = 1000 / typematicRate;            // keywait timeout in ms. Important so we can check connection and do Typematic
@@ -222,7 +198,6 @@ extern "C"
         BTKeyboard::KeyInfo info;                        // freshly received
         BTKeyboard::KeyInfo infoBuf;                     // currently pressed
         bool found = false;                              // just an innocent flasg I mean flag
-        int typematicLeft = typematicDelay;              // timekeeping
 
         info.modifier = infoBuf.modifier = (BTKeyboard::KeyModifier)0;
 
@@ -242,144 +217,6 @@ extern "C"
 
                 report.modifiers = (uint8_t)info.modifier;
 
-                // Handle modifier keys
-                if (info.modifier != infoBuf.modifier)
-                {
-
-                    // MODIFIER SECTION
-
-                    // Are you a communist?
-                    if (((uint8_t)info.modifier & 0x0f) != ((uint8_t)infoBuf.modifier & 0x0f))
-                    {
-
-                        // LSHIFT
-                        if (((uint8_t)info.modifier & 0x02) != ((uint8_t)infoBuf.modifier & 0x02))
-                        {
-                            if ((uint8_t)info.modifier & 0x02)
-                            {
-                                ESP_LOGD(TAG, "Down key: LSHIFT");
-                                keyboard.keydown(esp32_ps2dev::scancodes::Key::K_LSHIFT);
-                            }
-                            else
-                            {
-                                ESP_LOGD(TAG, "Up key: LSHIFT");
-                                keyboard.keyup(esp32_ps2dev::scancodes::Key::K_LSHIFT);
-                            }
-                        }
-
-                        // LCTRL
-                        if (((uint8_t)info.modifier & 0x01) != ((uint8_t)infoBuf.modifier & 0x01))
-                        {
-                            if ((uint8_t)info.modifier & 0x01)
-                            {
-                                ESP_LOGD(TAG, "Down key: LCTRL");
-                                keyboard.keydown(esp32_ps2dev::scancodes::Key::K_LCTRL);
-                            }
-                            else
-                            {
-                                ESP_LOGD(TAG, "Up key: LCTRL");
-                                keyboard.keyup(esp32_ps2dev::scancodes::Key::K_LCTRL);
-                            }
-                        }
-
-                        // LMETA
-                        if (((uint8_t)info.modifier & 0x08) != ((uint8_t)infoBuf.modifier & 0x08))
-                        {
-                            if ((uint8_t)info.modifier & 0x08)
-                            {
-                                ESP_LOGD(TAG, "Down key: LMETA");
-                                keyboard.keydown(esp32_ps2dev::scancodes::Key::K_LSUPER);
-                            }
-                            else
-                            {
-                                ESP_LOGD(TAG, "Up key: LMETA");
-                                keyboard.keyup(esp32_ps2dev::scancodes::Key::K_LSUPER);
-                            }
-                        }
-
-                        // LALT
-                        if (((uint8_t)info.modifier & 0x04) != ((uint8_t)infoBuf.modifier & 0x04))
-                        {
-                            if ((uint8_t)info.modifier & 0x04)
-                            {
-                                ESP_LOGD(TAG, "Down key: LALT");
-                                keyboard.keydown(esp32_ps2dev::scancodes::Key::K_LALT);
-                            }
-                            else
-                            {
-                                ESP_LOGD(TAG, "Up key: LALT");
-                                keyboard.keyup(esp32_ps2dev::scancodes::Key::K_LALT);
-                            }
-                        }
-                    }
-
-                    // Are you a capitalist?
-                    if (((uint8_t)info.modifier & 0xf0) != ((uint8_t)infoBuf.modifier & 0xf0))
-                    {
-
-                        // RSHIFT
-                        if (((uint8_t)info.modifier & 0x20) != ((uint8_t)infoBuf.modifier & 0x20))
-                        {
-                            if ((uint8_t)info.modifier & 0x20)
-                            {
-                                ESP_LOGD(TAG, "Down key: RSHIFT");
-                                keyboard.keydown(esp32_ps2dev::scancodes::Key::K_RSHIFT);
-                            }
-                            else
-                            {
-                                ESP_LOGD(TAG, "Up key: RSHIFT");
-                                keyboard.keyup(esp32_ps2dev::scancodes::Key::K_RSHIFT);
-                            }
-                        }
-
-                        // RCTRL
-                        if (((uint8_t)info.modifier & 0x10) != ((uint8_t)infoBuf.modifier & 0x10))
-                        {
-                            if ((uint8_t)info.modifier & 0x10)
-                            {
-                                ESP_LOGD(TAG, "Down key: RCTRL");
-                                keyboard.keydown(esp32_ps2dev::scancodes::Key::K_RCTRL);
-                            }
-                            else
-                            {
-                                ESP_LOGD(TAG, "Up key: RCTRL");
-                                keyboard.keyup(esp32_ps2dev::scancodes::Key::K_RCTRL);
-                            }
-                        }
-
-                        // RMETA
-                        if (((uint8_t)info.modifier & 0x80) != ((uint8_t)infoBuf.modifier & 0x80))
-                        {
-                            if ((uint8_t)info.modifier & 0x80)
-                            {
-                                ESP_LOGD(TAG, "Down key: RMETA");
-                                keyboard.keydown(esp32_ps2dev::scancodes::Key::K_RSUPER);
-                            }
-                            else
-                            {
-                                ESP_LOGD(TAG, "Up key: RMETA");
-                                keyboard.keyup(esp32_ps2dev::scancodes::Key::K_RSUPER);
-                            }
-                        }
-
-                        // RALT
-                        if (((uint8_t)info.modifier & 0x40) != ((uint8_t)infoBuf.modifier & 0x40))
-                        {
-                            if ((uint8_t)info.modifier & 0x40)
-                            {
-                                ESP_LOGD(TAG, "Down key: RALT");
-                                keyboard.keydown(esp32_ps2dev::scancodes::Key::K_RALT);
-                            }
-                            else
-                            {
-                                ESP_LOGD(TAG, "Up key: RALT");
-                                keyboard.keyup(esp32_ps2dev::scancodes::Key::K_RALT);
-                            }
-                        }
-                    }
-                }
-
-                // KEY SECTION (always tested)
                 // release the keys that have been just released
                 for (int i = 0; i < BTKeyboard::MAX_KEY_COUNT; i++)
                 {
@@ -396,11 +233,9 @@ extern "C"
                     if (!found)
                     {
                         ESP_LOGI(TAG, "Up key: %x", infoBuf.keys[i]);
-                        keyboard.keyHid_send(infoBuf.keys[i], false);                        
                         gpio_set_level(GPIO_NUM_2, 1);
 
-                        report.keys[i] = info.keys[i];   
-                        
+                        report.keys[i] = info.keys[i];
                     }
                     else
                         found = false;
@@ -422,7 +257,6 @@ extern "C"
                     if (!found)
                     {
                         ESP_LOGI(TAG, "Down key: %x", info.keys[i]);
-                        keyboard.keyHid_send(info.keys[i], true);
                         gpio_set_level(GPIO_NUM_2, 0);
 
                         report.keys[i] = info.keys[i];
@@ -434,31 +268,10 @@ extern "C"
                 i2c_master_send_text(&report);
 
                 infoBuf = info;                 // Now all the keys are handled, we save the state
-                typematicLeft = typematicDelay; // Typematic timer reset
             }
 
             else
             {
-                if (infoBuf.keys[0])
-                { // If any key held down, do the Typematic dance
-                    typematicLeft = typematicLeft - cycle;
-                    if (typematicLeft <= 0)
-                    {
-                        for (int i = 1; i < BTKeyboard::MAX_KEY_COUNT; i++)
-                        {
-                            if (infoBuf.keys[i] == 0)
-                            {
-                                if (infoBuf.keys[i - 1] != 0x39)
-                                { // Please don't repeat caps, it's ugly
-                                    ESP_LOGD(TAG, "Down key: %x", infoBuf.keys[i - 1]);
-                                    keyboard.keyHid_send(infoBuf.keys[i - 1], true); // Resend the last key
-                                }
-                                break;
-                            }
-                        }
-                    }
-                }
-
                 while (!BTKeyboard::isConnected)
                 {                                  // check connection
                     gpio_set_level(GPIO_NUM_2, 0); // disconnected
