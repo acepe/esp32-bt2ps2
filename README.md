@@ -1,3 +1,13 @@
+#Branch: "ble-only"
+This branch is designed to work with a USB-connection instead of a PS2-connection and works with newer ESPs (ESP32-S3 in my case) that do support USB-OTG but only Bluetooth-BLE (not classic). All Bluetooth-classic code had to be removed, because its not supported and would not compile on the newer ESPs...
+All the PS2-Keyboard code is removed and replaced with USB-Keyboard HID code.
+
+#Branch: "usb-over-i2c"
+This branch still works with the older ESP32, so it supports both Bluetooth-BLE and -classic. 
+All the PS2-Keyboard code is removed. The HID-Reports received via bluetooth are send over I2C to a second ESP(S3) that acts as the USB-Connector, receives the HID-Reports over I2C and resends them over USB to the connected host PC. 
+The software for this receiver is here: https://github.com/acepe/esp32-I2C-receiver
+
+
 8/12/23: Remember to connect the PS2 port Ground to the board, even if you're using external power! It won't work if you leave it floating.
 
 18/8/23: Release v0.4 is out with best compatibility as ever and many, many bug fixes!
