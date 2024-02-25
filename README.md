@@ -8,7 +8,7 @@ All the PS2-Keyboard code is removed. The HID-Reports received via bluetooth are
 The software for this receiver is here: https://github.com/acepe/esp32-I2C-receiver
 
 
-8/12/23: Remember to connect the PS2 port Ground to the board, even if you're using external power! It won't work if you leave it floating.
+8/12/23: Remember to connect the PS2 port Ground to the board, it won't work if you leave it floating.
 
 18/8/23: Release v0.4 is out with best compatibility as ever and many, many bug fixes!
 
