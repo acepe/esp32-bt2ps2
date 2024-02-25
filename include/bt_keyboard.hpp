@@ -65,7 +65,7 @@ public:
   const uint8_t ALT_MASK = ((uint8_t)KeyModifier::L_ALT) | ((uint8_t)KeyModifier::R_ALT);
   const uint8_t META_MASK = ((uint8_t)KeyModifier::L_META) | ((uint8_t)KeyModifier::R_META);
 
-  static const uint8_t MAX_KEY_COUNT = 10; // Adjusted for normal humans with 10 fingers
+  static const uint8_t MAX_KEY_COUNT = 6; // Adjusted for normal humans with 10 fingers
   
   struct KeyInfo
   {

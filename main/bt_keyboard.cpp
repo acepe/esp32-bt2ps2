@@ -734,7 +734,7 @@ void BTKeyboard::hidh_callback(void *handler_args, esp_event_base_t base, int32_
              param->input.map_index,
              param->input.report_id,
              param->input.length);
-    ESP_LOG_BUFFER_HEX_LEVEL(TAG, param->input.data, param->input.length, ESP_LOG_DEBUG);
+    ESP_LOG_BUFFER_HEX_LEVEL(TAG, param->input.data, param->input.length, ESP_LOG_INFO);
     if ((param->input.usage == ESP_HID_USAGE_KEYBOARD) && (param->input.report_id == 1)) // Filter report usages to kb only type
     {
       bt_keyboard->push_key(param->input.data, param->input.length);
@@ -756,7 +756,7 @@ void BTKeyboard::hidh_callback(void *handler_args, esp_event_base_t base, int32_
   case ESP_HIDH_CLOSE_EVENT:
   {
     const uint8_t *bda = esp_hidh_dev_bda_get(param->close.dev);
-    ESP_LOGI(TAG, ESP_BD_ADDR_STR " CLOSE: %s", ESP_BD_ADDR_HEX(bda), esp_hidh_dev_name_get(param->close.dev));
+    ESP_LOGD(TAG, ESP_BD_ADDR_STR " CLOSE: %s", ESP_BD_ADDR_HEX(bda), esp_hidh_dev_name_get(param->close.dev));
     isConnected = false;
     break;
   }
@@ -776,11 +776,11 @@ void BTKeyboard::push_key(uint8_t *keys, uint8_t size)
     return;
   }
 
-  uint8_t max = (size > MAX_KEY_COUNT + 2) ? MAX_KEY_COUNT : size - 2;
+  uint8_t max = (size > MAX_KEY_COUNT + 1) ? MAX_KEY_COUNT : size - 1;
   // inf.keys[0] = inf.keys[1] = inf.keys[2] = 0; // No need to do this?
   for (int i = 0; i < max; i++)
   {
-    inf.keys[i] = keys[i + 2];
+    inf.keys[i] = keys[i + 1];
   }
   if (max < MAX_KEY_COUNT) // End flag in case our keyboard reports less keys than our max count
     inf.keys[max] = 0;

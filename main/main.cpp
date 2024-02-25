@@ -8,14 +8,25 @@ Dedicated to all who love me and all who I love.
 Never stop dreaming.
 */
 
-#include "../include/globals.hpp"
-#include "nvs_flash.h"
-#include "driver/gpio.h"
-#include "../include/bt_keyboard.hpp"
 #include <iostream>
 #include <cmath>
+#include <stdio.h>
+#include <stdlib.h>
 
+#include "class/hid/hid_device.h"
+#include "driver/gpio.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "esp_log.h"
+#include "tinyusb.h"
+#include "led_strip.h"
+#include "nvs_flash.h"
+
+#include "../include/globals.hpp"
+#include "../include/bt_keyboard.hpp"
 #include "../include/esp32-ps2dev.h" // Emulate a PS/2 device
+
+#define BLINK_GPIO 48
 
 static constexpr char const *TAG = "BTKeyboard";
 
@@ -87,28 +98,157 @@ void pairing_handler(uint32_t pid)
     }
 }
 
-extern "C"
-{
+extern "C" {
+    
+    static led_strip_handle_t led_strip;
+
+    static void blink_led(uint8_t state) {
+        /* If the addressable LED is enabled */
+        if (state) {
+            ESP_LOGD(TAG, "LED on");
+            /* Set the LED pixel using RGB from 0 (0%) to 255 (100%) for each color */
+            led_strip_set_pixel(led_strip, 0, 64, 0, 64);
+            /* Refresh the strip to send data */
+            led_strip_refresh(led_strip);
+        } else {
+            ESP_LOGD(TAG, "LED off");
+            /* Set all LED off to clear all pixels */
+            led_strip_clear(led_strip);
+        }
+    }
+
+    static void init_led(void) {
+        ESP_LOGI(TAG, "On board adressable LED initialisation");
+        /* LED strip initialization with the GPIO and pixels number*/
+        led_strip_config_t strip_config = {
+            .strip_gpio_num = BLINK_GPIO,
+            .max_leds = 1,  // one LED on board
+        };
+        led_strip_rmt_config_t rmt_config = {
+            .resolution_hz = 10 * 1000 * 1000,  // 10MHz
+        };
+        ESP_ERROR_CHECK(
+            led_strip_new_rmt_device(&strip_config, &rmt_config, &led_strip));
+        /* Set all LED off to clear all pixels */
+        led_strip_clear(led_strip);
+        ESP_LOGI(TAG, "On board adressable LED initialisation DONE");
+    }
+
+    /************* TinyUSB descriptors ****************/
+
+    #define TUSB_DESC_TOTAL_LEN \
+    (TUD_CONFIG_DESC_LEN + CFG_TUD_HID * TUD_HID_DESC_LEN)
+
+    /**
+     * @brief HID report descriptor
+     *
+     * In this example we implement Keyboard + Mouse HID device,
+     * so we must define both report descriptors
+     */
+    const uint8_t hid_report_descriptor[] = {
+        TUD_HID_REPORT_DESC_KEYBOARD(HID_REPORT_ID(HID_ITF_PROTOCOL_KEYBOARD))};
+
+    /**
+     * @brief String descriptor
+     */
+    const char *hid_string_descriptor[5] = {
+        // array of pointer to string descriptors
+        (char[]){0x09, 0x04},     // 0: is supported language is English (0x0409),
+                                // 0x0407 is for german
+        "TinyUSB",                // 1: Manufacturer
+        "TinyUSB Device",         // 2: Product
+        "123456",                 // 3: Serials, should use chip ID
+        "Example HID interface",  // 4: HID
+    };
+
+    /**
+     * @brief Configuration descriptor
+     *
+     * This is a simple configuration descriptor that defines 1 configuration and 1
+     * HID interface
+     */
+    static const uint8_t hid_configuration_descriptor[] = {
+        // Configuration number, interface count, string index, total length,
+        // attribute, power in mA
+        TUD_CONFIG_DESCRIPTOR(1, 1, 0, TUSB_DESC_TOTAL_LEN,
+                            TUSB_DESC_CONFIG_ATT_REMOTE_WAKEUP, 100),
+
+        // Interface number, string index, boot protocol, report descriptor len, EP
+        // In address, size & polling interval
+        TUD_HID_DESCRIPTOR(0, 4, false, sizeof(hid_report_descriptor), 0x81, 16,
+                        10),
+    };
+
+    /********* TinyUSB HID callbacks ***************/
+
+    // Invoked when received GET HID REPORT DESCRIPTOR request
+    // Application return pointer to descriptor, whose contents must exist long
+    // enough for transfer to complete
+    uint8_t const *tud_hid_descriptor_report_cb(uint8_t instance) {
+        // We use only one interface and one HID report descriptor, so we can ignore
+        // parameter 'instance'
+        return hid_report_descriptor;
+    }
+
+    // Invoked when received GET_REPORT control request
+    // Application must fill buffer report's content and return its length.
+    // Return zero will cause the stack to STALL request
+    uint16_t tud_hid_get_report_cb(uint8_t instance, uint8_t report_id,
+                                hid_report_type_t report_type, uint8_t *buffer,
+                                uint16_t reqlen) {
+        (void)instance;
+        (void)report_id;
+        (void)report_type;
+        (void)buffer;
+        (void)reqlen;
+
+        return 0;
+    }
+
+    // Invoked when received SET_REPORT control request or
+    // received data on OUT endpoint ( Report ID = 0, Type = 0 )
+    void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id,
+                            hid_report_type_t report_type, uint8_t const *buffer,
+                            uint16_t bufsize) {}
+
+    
+    void reset_report(hid_keyboard_report_t *report) {
+        report->modifier = 0;  // Reset modifiers
+        for (int i = 0; i < sizeof(report->keycode); i++) {
+            report->keycode[i] = 0;
+        }
+    }
+
+    void init_usb() {
+        ESP_LOGI(TAG, "USB initialization");
+        const tinyusb_config_t tusb_cfg = {
+            .device_descriptor = NULL,
+            .string_descriptor = hid_string_descriptor,
+            .string_descriptor_count =
+                sizeof(hid_string_descriptor) / sizeof(hid_string_descriptor[0]),
+            .external_phy = false,
+            .configuration_descriptor = hid_configuration_descriptor,
+        };
+        ESP_ERROR_CHECK(tinyusb_driver_install(&tusb_cfg));
+        ESP_LOGI(TAG, "USB initialization DONE");
+    }
+    static void app_send_hid_report(hid_keyboard_report_t *report) {
+      ESP_LOGI(TAG, "Sending Keyboard report");
+
+      tud_hid_report(HID_ITF_PROTOCOL_KEYBOARD, report,
+                     sizeof(hid_keyboard_report_t));
+      vTaskDelay(pdMS_TO_TICKS(10));
+    }
 
     void app_main(void)
     {
-
-        gpio_config_t io_conf;
-        io_conf.intr_type = GPIO_INTR_DISABLE;
-        io_conf.mode = GPIO_MODE_OUTPUT_OD;
-        io_conf.pin_bit_mask = (1ULL << DATA_PIN);
-        io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
-        io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
-        gpio_config(&io_conf);
-        io_conf.pin_bit_mask = (1ULL << CLK_PIN);
-        gpio_config(&io_conf);
-
-        // init PS/2 emulation first
+        init_usb();
+        init_led();
 
         gpio_reset_pin(GPIO_NUM_2);                       // using built-in LED for notifications
         gpio_set_direction(GPIO_NUM_2, GPIO_MODE_OUTPUT); // Set the GPIO as a push/pull output
         gpio_set_level(GPIO_NUM_2, 1);
-        keyboard.begin();
+        
         gpio_set_level(GPIO_NUM_2, 0);
 
         // init BTKeyboard
@@ -153,7 +293,6 @@ extern "C"
 
         // time variables, don't adjust unless you know what you're doing
         uint8_t typematicRate = 20;    // characters per second in Typematic mode
-        uint16_t typematicDelay = 500; // ms to become Typematic
 
         // fixed stuff
         uint8_t cycle = 1000 / typematicRate;            // keywait timeout in ms. Important so we can check connection and do Typematic
@@ -161,7 +300,6 @@ extern "C"
         BTKeyboard::KeyInfo info;                        // freshly received
         BTKeyboard::KeyInfo infoBuf;                     // currently pressed
         bool found = false;                              // just an innocent flasg I mean flag
-        int typematicLeft = typematicDelay;              // timekeeping
 
         info.modifier = infoBuf.modifier = (BTKeyboard::KeyModifier)0;
 
@@ -175,144 +313,16 @@ extern "C"
         {
             if (bt_keyboard.wait_for_low_event(info, repeat_period))
             {
-                // Handle modifier keys
-                if (info.modifier != infoBuf.modifier)
-                {
+                ESP_LOGI(TAG, "Received BT-HID report");
+                ESP_LOGI(TAG, "Modifier: %02X", info.modifier);
+                ESP_LOGI(TAG, "Keys:");
+                ESP_LOG_BUFFER_HEX(TAG, info.keys, sizeof(info.keys));
+                
+                hid_keyboard_report_t report;
+                reset_report(&report);
 
-                    // MODIFIER SECTION
-
-                    // Are you a communist?
-                    if (((uint8_t)info.modifier & 0x0f) != ((uint8_t)infoBuf.modifier & 0x0f))
-                    {
-
-                        // LSHIFT
-                        if (((uint8_t)info.modifier & 0x02) != ((uint8_t)infoBuf.modifier & 0x02))
-                        {
-                            if ((uint8_t)info.modifier & 0x02)
-                            {
-                                ESP_LOGD(TAG, "Down key: LSHIFT");
-                                keyboard.keydown(esp32_ps2dev::scancodes::Key::K_LSHIFT);
-                            }
-                            else
-                            {
-                                ESP_LOGD(TAG, "Up key: LSHIFT");
-                                keyboard.keyup(esp32_ps2dev::scancodes::Key::K_LSHIFT);
-                            }
-                        }
-
-                        // LCTRL
-                        if (((uint8_t)info.modifier & 0x01) != ((uint8_t)infoBuf.modifier & 0x01))
-                        {
-                            if ((uint8_t)info.modifier & 0x01)
-                            {
-                                ESP_LOGD(TAG, "Down key: LCTRL");
-                                keyboard.keydown(esp32_ps2dev::scancodes::Key::K_LCTRL);
-                            }
-                            else
-                            {
-                                ESP_LOGD(TAG, "Up key: LCTRL");
-                                keyboard.keyup(esp32_ps2dev::scancodes::Key::K_LCTRL);
-                            }
-                        }
-
-                        // LMETA
-                        if (((uint8_t)info.modifier & 0x08) != ((uint8_t)infoBuf.modifier & 0x08))
-                        {
-                            if ((uint8_t)info.modifier & 0x08)
-                            {
-                                ESP_LOGD(TAG, "Down key: LMETA");
-                                keyboard.keydown(esp32_ps2dev::scancodes::Key::K_LSUPER);
-                            }
-                            else
-                            {
-                                ESP_LOGD(TAG, "Up key: LMETA");
-                                keyboard.keyup(esp32_ps2dev::scancodes::Key::K_LSUPER);
-                            }
-                        }
-
-                        // LALT
-                        if (((uint8_t)info.modifier & 0x04) != ((uint8_t)infoBuf.modifier & 0x04))
-                        {
-                            if ((uint8_t)info.modifier & 0x04)
-                            {
-                                ESP_LOGD(TAG, "Down key: LALT");
-                                keyboard.keydown(esp32_ps2dev::scancodes::Key::K_LALT);
-                            }
-                            else
-                            {
-                                ESP_LOGD(TAG, "Up key: LALT");
-                                keyboard.keyup(esp32_ps2dev::scancodes::Key::K_LALT);
-                            }
-                        }
-                    }
-
-                    // Are you a capitalist?
-                    if (((uint8_t)info.modifier & 0xf0) != ((uint8_t)infoBuf.modifier & 0xf0))
-                    {
-
-                        // RSHIFT
-                        if (((uint8_t)info.modifier & 0x20) != ((uint8_t)infoBuf.modifier & 0x20))
-                        {
-                            if ((uint8_t)info.modifier & 0x20)
-                            {
-                                ESP_LOGD(TAG, "Down key: RSHIFT");
-                                keyboard.keydown(esp32_ps2dev::scancodes::Key::K_RSHIFT);
-                            }
-                            else
-                            {
-                                ESP_LOGD(TAG, "Up key: RSHIFT");
-                                keyboard.keyup(esp32_ps2dev::scancodes::Key::K_RSHIFT);
-                            }
-                        }
-
-                        // RCTRL
-                        if (((uint8_t)info.modifier & 0x10) != ((uint8_t)infoBuf.modifier & 0x10))
-                        {
-                            if ((uint8_t)info.modifier & 0x10)
-                            {
-                                ESP_LOGD(TAG, "Down key: RCTRL");
-                                keyboard.keydown(esp32_ps2dev::scancodes::Key::K_RCTRL);
-                            }
-                            else
-                            {
-                                ESP_LOGD(TAG, "Up key: RCTRL");
-                                keyboard.keyup(esp32_ps2dev::scancodes::Key::K_RCTRL);
-                            }
-                        }
-
-                        // RMETA
-                        if (((uint8_t)info.modifier & 0x80) != ((uint8_t)infoBuf.modifier & 0x80))
-                        {
-                            if ((uint8_t)info.modifier & 0x80)
-                            {
-                                ESP_LOGD(TAG, "Down key: RMETA");
-                                keyboard.keydown(esp32_ps2dev::scancodes::Key::K_RSUPER);
-                            }
-                            else
-                            {
-                                ESP_LOGD(TAG, "Up key: RMETA");
-                                keyboard.keyup(esp32_ps2dev::scancodes::Key::K_RSUPER);
-                            }
-                        }
-
-                        // RALT
-                        if (((uint8_t)info.modifier & 0x40) != ((uint8_t)infoBuf.modifier & 0x40))
-                        {
-                            if ((uint8_t)info.modifier & 0x40)
-                            {
-                                ESP_LOGD(TAG, "Down key: RALT");
-                                keyboard.keydown(esp32_ps2dev::scancodes::Key::K_RALT);
-                            }
-                            else
-                            {
-                                ESP_LOGD(TAG, "Up key: RALT");
-                                keyboard.keyup(esp32_ps2dev::scancodes::Key::K_RALT);
-                            }
-                        }
-                    }
-                }
-
-                // KEY SECTION (always tested)
+                report.modifier = (uint8_t)info.modifier;
+                               
                 // release the keys that have been just released
                 for (int i = 0; i < BTKeyboard::MAX_KEY_COUNT; i++)
                 {
@@ -328,9 +338,10 @@ extern "C"
                     }
                     if (!found)
                     {
-                        ESP_LOGD(TAG, "Up key: %x", infoBuf.keys[i]);
-                        keyboard.keyHid_send(infoBuf.keys[i], false);
+                        ESP_LOGI(TAG, "Up key: %x", infoBuf.keys[i]);
                         gpio_set_level(GPIO_NUM_2, 1);
+
+                        report.keycode[i] = info.keys[i];
                     }
                     else
                         found = false;
@@ -351,40 +362,26 @@ extern "C"
                     }
                     if (!found)
                     {
-                        ESP_LOGD(TAG, "Down key: %x", info.keys[i]);
-                        keyboard.keyHid_send(info.keys[i], true);
+                        ESP_LOGI(TAG, "Down key: %x", info.keys[i]);
                         gpio_set_level(GPIO_NUM_2, 0);
+
+                        report.keycode[i] = info.keys[i];
                     }
                     else 
                         found = false;
                 }
 
+                // Process the received HID report            
+                if (tud_mounted()) {
+                    blink_led(1);
+                    app_send_hid_report(&report);
+                    blink_led(0);
+                }
                 infoBuf = info;                 // Now all the keys are handled, we save the state
-                typematicLeft = typematicDelay; // Typematic timer reset
             }
 
             else
             {
-                if (infoBuf.keys[0])
-                { // If any key held down, do the Typematic dance
-                    typematicLeft = typematicLeft - cycle;
-                    if (typematicLeft <= 0)
-                    {
-                        for (int i = 1; i < BTKeyboard::MAX_KEY_COUNT; i++)
-                        {
-                            if (infoBuf.keys[i] == 0)
-                            {
-                                if (infoBuf.keys[i - 1] != 0x39)
-                                { // Please don't repeat caps, it's ugly
-                                    ESP_LOGD(TAG, "Down key: %x", infoBuf.keys[i - 1]);
-                                    keyboard.keyHid_send(infoBuf.keys[i - 1], true); // Resend the last key
-                                }
-                                break;
-                            }
-                        }
-                    }
-                }
-
                 while (!BTKeyboard::isConnected)
                 {                                  // check connection
                     gpio_set_level(GPIO_NUM_2, 0); // disconnected
@@ -395,4 +392,4 @@ extern "C"
             }
         }
     }
-}
+    }
