@@ -1,3 +1,6 @@
+# Notice
+This fork is the basis for my own projects "esp32-bt2usb" and "esp32-bt2i2c". Please check these repositories. I will not maintain this fork.
+
 # Branch: "ble-only"
 This branch is designed to work with a USB-connection instead of a PS2-connection and works with newer ESPs (ESP32-S3 in my case) that do support USB-OTG but only Bluetooth-BLE (not classic). All Bluetooth-classic code had to be removed, because its not supported and would not compile on the newer ESPs...
 All the PS2-Keyboard code is removed and replaced with USB-Keyboard HID code.
